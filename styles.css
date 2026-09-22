@@ -1,26 +1,26 @@
 :root {
   color-scheme: dark;
-  --bg: #0b0c0f;
-  --bg-elevated: #101115;
-  --sidebar: #08090b;
-  --surface: #15171b;
-  --surface-hover: #1b1e23;
-  --surface-strong: #22252b;
+  --bg: #111216;
+  --bg-elevated: #1b1d23;
+  --sidebar: #17181d;
+  --surface: #202229;
+  --surface-hover: #292c35;
+  --surface-strong: #30343e;
   --border: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #f3f4f6;
-  --muted: #9297a1;
+  --muted: #a5abb8;
   --muted-strong: #b9bdc6;
-  --accent: #9af5bd;
-  --accent-strong: #6ceaa0;
-  --accent-ink: #092415;
+  --accent: #78a7ff;
+  --accent-strong: #99bdff;
+  --accent-ink: #101d36;
   --sidebar-width: 276px;
   --topbar-height: 66px;
   --radius-lg: 22px;
   --radius-md: 14px;
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   font-family:
-    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
 }
 
 * {
@@ -889,7 +889,7 @@ svg {
   background: var(--accent);
   cursor: pointer;
   color: var(--accent-ink);
-  box-shadow: 0 7px 20px rgba(73, 197, 122, 0.12);
+  box-shadow: 0 7px 20px rgba(120, 167, 255, 0.12);
   transition:
     background 140ms ease,
     transform 140ms ease,
@@ -897,7 +897,7 @@ svg {
 }
 
 .send-button:hover:not(:disabled) {
-  background: #b1facd;
+  background: var(--accent-strong);
   transform: translateY(-1px);
 }
 
@@ -932,7 +932,7 @@ svg {
 button:focus-visible,
 a:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(154, 245, 189, 0.75);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

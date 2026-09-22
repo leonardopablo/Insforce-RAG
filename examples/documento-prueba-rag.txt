@@ -1,0 +1,11 @@
+Manual operativo de Biblioteca Horizonte
+
+Biblioteca Horizonte es un centro cultural ficticio ubicado en Arequipa. Atiende al público de lunes a sábado, de 08:30 a 19:00. Los domingos y feriados permanece cerrada. Para ingresar no es necesario realizar una reserva, pero cada visitante debe presentar un documento de identidad vigente en la recepción. El correo de atención es contacto@bibliotecahorizonte.example y el número ficticio de consultas es 054-555-0182.
+
+El préstamo de libros está disponible únicamente para miembros registrados. Cada miembro puede retirar hasta cuatro libros al mismo tiempo durante un máximo de catorce días calendario. La renovación puede solicitarse una sola vez por siete días adicionales, siempre que otro usuario no haya reservado el libro. Las devoluciones realizadas después de la fecha límite generan una suspensión de préstamos de dos días por cada día de retraso; la biblioteca no cobra multas económicas.
+
+La sala de estudio grupal tiene capacidad para ocho personas y debe reservarse con al menos veinticuatro horas de anticipación. Las reservas se realizan en recepción o mediante el correo salas@bibliotecahorizonte.example. Cada grupo puede utilizar la sala durante un máximo de dos horas por día. No se permite consumir alimentos dentro de la sala, aunque sí se admiten bebidas en recipientes cerrados.
+
+La red inalámbrica para visitantes se llama Horizonte-Invitados. La contraseña se entrega personalmente en recepción y cambia el primer lunes de cada mes. Los equipos de escritorio pueden utilizarse durante noventa minutos por sesión. Está permitido guardar documentos temporalmente, pero todos los archivos locales se eliminan automáticamente cuando finaliza la sesión.
+
+Los talleres culturales se anuncian el día 20 de cada mes. La inscripción se abre el día 22 a las 10:00 y se atiende por orden de registro. Si una actividad alcanza su capacidad máxima, los interesados pasan a una lista de espera. Este manual no contiene información sobre cafetería, estacionamiento, cursos de idiomas ni precios de membresía.
