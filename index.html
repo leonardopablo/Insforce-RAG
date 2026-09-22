@@ -3,288 +3,145 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Interfaz de chat de Insforce, diseñada como una experiencia limpia y enfocada."
-    />
-    <meta name="theme-color" content="#0b0c0f" />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2316171b'/%3E%3Cpath d='M19 17h26v8H27v6h16v8H27v8H19z' fill='%2397f7c0'/%3E%3C/svg%3E"
-    />
-    <title>Insforce — Chat</title>
+    <meta name="description" content="TRAZAI: consulta tus documentos y encuentra respuestas con fuentes verificables." />
+    <meta name="theme-color" content="#111216" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23242730'/%3E%3Cpath d='M17 19h30v8H36v21h-8V27H17z' fill='%2378a7ff'/%3E%3C/svg%3E" />
+    <title>TRAZAI — Tu espacio de conocimiento</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="integration.css" />
+    <script src="script.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Navegación de chats">
         <div class="sidebar__top">
-          <a class="brand" href="#" aria-label="Ir al inicio de Insforce">
-            <span class="brand__mark" aria-hidden="true">
-              <span></span><span></span>
-            </span>
-            <span class="brand__name">insforce</span>
+          <a class="brand" href="#" aria-label="Ir al inicio de TRAZAI">
+            <span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 9h18M16 9v16" /></svg></span>
+            <span class="brand__name">TRAZAI</span>
           </a>
-
           <button class="icon-button sidebar-close" id="sidebarClose" type="button" aria-label="Cerrar menú">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
           </button>
         </div>
-
         <button class="new-chat" id="newChat" type="button">
-          <span class="new-chat__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </span>
-          <span>Nueva conversación</span>
-          <kbd>⌘ K</kbd>
+          <span class="new-chat__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>
+          <span>Nueva conversación</span><kbd>Ctrl K</kbd>
         </button>
-
-        <nav class="sidebar__nav" aria-label="Conversaciones recientes">
-          <section class="chat-group">
-            <h2>Hoy</h2>
-            <button class="chat-link is-active" type="button" data-chat-title="Asistente de conocimiento">
-              <span>Asistente de conocimiento</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-            <button class="chat-link" type="button" data-chat-title="Resumen del reporte anual">
-              <span>Resumen del reporte anual</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-          </section>
-
-          <section class="chat-group">
-            <h2>Últimos 7 días</h2>
-            <button class="chat-link" type="button" data-chat-title="Análisis de contratos Q3">
-              <span>Análisis de contratos Q3</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-            <button class="chat-link" type="button" data-chat-title="Políticas de seguridad">
-              <span>Políticas de seguridad</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-            <button class="chat-link" type="button" data-chat-title="Preguntas sobre onboarding">
-              <span>Preguntas sobre onboarding</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-          </section>
-
-          <section class="chat-group">
-            <h2>Agosto</h2>
-            <button class="chat-link" type="button" data-chat-title="Métricas de satisfacción">
-              <span>Métricas de satisfacción</span>
-              <svg class="chat-link__more" viewBox="0 0 24 24" aria-label="Más opciones">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
-            </button>
-          </section>
-        </nav>
-
+        <button class="library-button" id="sidebarUpload" type="button" data-open-document>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7zM14 3v5h5M12 17v-6m-3 3 3-3 3 3" /></svg>
+          <span>Añadir documento<small>TXT · Carga reanudable</small></span>
+          <span aria-hidden="true">+</span>
+        </button>
+        <nav class="sidebar__nav" id="chatHistory" aria-label="Conversaciones recientes"></nav>
+        <p class="sidebar-note">Historial guardado en este navegador.</p>
         <div class="sidebar__footer">
-          <button class="profile" type="button" aria-label="Abrir perfil de Adrián">
-            <span class="profile__avatar">AM</span>
-            <span class="profile__info">
-              <strong>Adrián Mendoza</strong>
-              <small>Plan Pro</small>
-            </span>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="5" cy="12" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="19" cy="12" r="1.5" />
-            </svg>
-          </button>
+          <div class="profile">
+            <span class="profile__avatar">T</span>
+            <span class="profile__info"><strong>Espacio personal</strong><small>Historial en este navegador</small></span>
+          </div>
         </div>
       </aside>
-
       <div class="scrim" id="scrim" aria-hidden="true"></div>
-
       <main class="main-panel">
         <header class="topbar">
           <div class="topbar__left">
-            <button class="icon-button menu-button" id="menuButton" type="button" aria-label="Abrir menú">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
+            <button class="icon-button menu-button" id="menuButton" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidebar">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
             </button>
-
-            <button class="model-selector" type="button" aria-label="Seleccionar modelo">
-              <span>Insforce AI</span>
-              <span class="model-badge">RAG</span>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m8 10 4 4 4-4" />
-              </svg>
-            </button>
+            <div class="model-selector"><span id="conversationTitle">Tu espacio de conocimiento</span><span class="model-badge">TRAZAI</span></div>
           </div>
-
           <div class="topbar__actions">
-            <button class="topbar-action" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 16V4m0 0L8 8m4-4 4 4" />
-                <path d="M5 13v6h14v-6" />
-              </svg>
-              <span>Compartir</span>
+            <span class="connection-status" id="connectionStatus" role="status">Conectando…</span>
+            <button class="topbar-action" id="exportChat" type="button" aria-label="Descargar conversación" title="Descargar conversación" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M5 16v4h14v-4" /></svg><span>Descargar</span>
             </button>
-            <button class="icon-button" type="button" aria-label="Más opciones">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="5" cy="12" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-              </svg>
+            <button class="icon-button" id="deleteChat" type="button" aria-label="Eliminar conversación" title="Eliminar conversación" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" /></svg>
             </button>
           </div>
         </header>
-
-        <section class="conversation" aria-live="polite">
+        <section class="conversation" aria-label="Conversación">
           <div class="welcome" id="welcome">
-            <div class="welcome__brand" aria-hidden="true">
-              <span></span><span></span>
-              <i></i>
-            </div>
+            <div class="welcome__brand" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 9h18M16 9v16" /></svg></div>
             <div class="welcome__copy">
-              <p class="eyebrow"><span></span> CONOCIMIENTO CONECTADO</p>
-              <h1>¿En qué puedo ayudarte?</h1>
-              <p>Consulta tus documentos, encuentra respuestas y convierte información en decisiones.</p>
+              <p class="eyebrow">TU CONOCIMIENTO, CONECTADO</p>
+              <h1>Respuestas claras.<br />Fuentes a la vista.</h1>
+              <p>Añade tus documentos y encuentra lo que necesitas. Cada respuesta, acompañada de sus fuentes.</p>
             </div>
-
+            <button class="welcome-upload" type="button" data-open-document><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M5 16v4h14v-4" /></svg>Añadir un documento<span>TXT</span></button>
+            <p class="suggestions-label">O empieza con una pregunta</p>
             <div class="suggestions" aria-label="Sugerencias">
-              <button class="suggestion" type="button" data-prompt="Resume los puntos clave del último informe">
-                <span class="suggestion__icon suggestion__icon--mint" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M7 3h7l4 4v14H7z" />
-                    <path d="M14 3v5h5M10 13h5M10 17h5" />
-                  </svg>
-                </span>
-                <span>
-                  <strong>Resumir información</strong>
-                  <small>Puntos clave de un documento</small>
-                </span>
-                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+              <button class="suggestion" type="button" data-prompt="¿Cuál es el horario de atención indicado en los documentos?">
+                <span class="suggestion__icon suggestion__icon--mint" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></span>
+                <span><strong>Encuentra un dato</strong><small>Consulta horarios de atención</small></span>
+                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
               </button>
-
-              <button class="suggestion" type="button" data-prompt="Compara los resultados de este trimestre con el anterior">
-                <span class="suggestion__icon suggestion__icon--blue" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />
-                  </svg>
-                </span>
-                <span>
-                  <strong>Comparar resultados</strong>
-                  <small>Encuentra cambios y tendencias</small>
-                </span>
-                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+              <button class="suggestion" type="button" data-prompt="¿Qué pasos indican los documentos para registrar una incidencia?">
+                <span class="suggestion__icon suggestion__icon--blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 13h5M10 17h5" /></svg></span>
+                <span><strong>Consulta un procedimiento</strong><small>Encuentra los pasos y requisitos</small></span>
+                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
               </button>
-
-              <button class="suggestion" type="button" data-prompt="Encuentra la política de trabajo remoto">
-                <span class="suggestion__icon suggestion__icon--violet" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-4-4" />
-                  </svg>
-                </span>
-                <span>
-                  <strong>Buscar una respuesta</strong>
-                  <small>Explora la base de conocimiento</small>
-                </span>
-                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+              <button class="suggestion" type="button" data-prompt="¿Qué plazos de conservación de las copias de seguridad indican los documentos?">
+                <span class="suggestion__icon suggestion__icon--violet" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 5 8 9 8 9s8-4 8-9V7zM8 12l3 3 5-6" /></svg></span>
+                <span><strong>Revisa una política</strong><small>Consulta plazos de conservación</small></span>
+                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
               </button>
-
-              <button class="suggestion" type="button" data-prompt="Ayúdame a redactar una propuesta ejecutiva">
-                <span class="suggestion__icon suggestion__icon--amber" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z" />
-                    <path d="m14.5 7.5 3 3" />
-                  </svg>
-                </span>
-                <span>
-                  <strong>Crear un borrador</strong>
-                  <small>Empieza con una idea clara</small>
-                </span>
-                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+              <button class="suggestion" type="button" data-prompt="¿Qué canales de contacto se mencionan en los documentos?">
+                <span class="suggestion__icon suggestion__icon--amber" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4M9 9a2 2 0 0 1 4 0c0 2-2 1-2 3M11 14h.01" /></svg></span>
+                <span><strong>Localiza un contacto</strong><small>Encuentra los canales disponibles</small></span>
+                <svg class="suggestion__arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
               </button>
             </div>
           </div>
-
-          <div class="messages" id="messages" hidden></div>
+          <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text" hidden></div>
         </section>
-
         <div class="composer-zone">
+          <p class="notice" id="notice" role="status"></p>
           <form class="composer" id="composer">
-            <textarea
-              id="messageInput"
-              rows="1"
-              placeholder="Pregunta sobre tus documentos..."
-              aria-label="Escribe tu mensaje"
-            ></textarea>
-
+            <textarea id="messageInput" rows="1" maxlength="4000" placeholder="Pregunta sobre tus documentos..." aria-label="Escribe tu mensaje"></textarea>
             <div class="composer__toolbar">
               <div class="composer__tools">
-                <button class="composer-button" type="button" aria-label="Adjuntar archivo">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m9 12 5-5a3 3 0 0 1 4 4l-7 7a5 5 0 0 1-7-7l7-7" />
-                  </svg>
+                <button class="composer-button" id="attachButton" type="button" aria-label="Añadir documento" title="Añadir archivo TXT grande">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5-5a3 3 0 0 1 4 4l-7 7a5 5 0 0 1-7-7l7-7" /></svg>
                 </button>
-                <button class="source-button" type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 6h16M7 12h10M10 18h4" />
-                  </svg>
-                  <span>Fuentes</span>
+                <button class="source-button" id="sourcesButton" type="button" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg><span>Fuentes</span>
                 </button>
               </div>
-
               <div class="composer__actions">
-                <button class="composer-button" type="button" aria-label="Usar micrófono">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="9" y="3" width="6" height="12" rx="3" />
-                    <path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" />
-                  </svg>
-                </button>
+                <button class="text-button stop-button" id="stopButton" type="button" hidden>Detener</button>
                 <button class="send-button" id="sendButton" type="submit" aria-label="Enviar mensaje" disabled>
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 19V5m0 0L7 10m5-5 5 5" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0L7 10m5-5 5 5" /></svg>
                 </button>
               </div>
             </div>
           </form>
-          <p class="disclaimer">Insforce puede cometer errores. Verifica la información importante.</p>
+          <p class="disclaimer">Cada pregunta se consulta en tus documentos. Verifica las fuentes de la respuesta.</p>
         </div>
       </main>
     </div>
-
-    <script src="script.js"></script>
+    <dialog class="document-dialog" id="documentDialog" aria-labelledby="documentTitle">
+      <header><h2 id="documentTitle">Añadir documento</h2><button class="icon-button" id="closeDocument" type="button" aria-label="Cerrar documento"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
+      <p>Convierte tu archivo en conocimiento consultable. Puedes pausar la carga y continuar desde el progreso guardado.</p>
+      <div class="upload-capabilities"><span>TXT · UTF-8</span><span id="documentLimit">Consultando límite…</span><span>Sin duplicados</span></div>
+      <form id="documentForm">
+        <label for="documentFile">Archivo TXT</label>
+        <input id="documentFile" type="file" accept=".txt,text/plain" required />
+        <label for="documentSource">Nombre de la fuente</label>
+        <input id="documentSource" maxlength="500" placeholder="Se completará con el nombre del archivo" required />
+        <div class="ingestion-progress" id="ingestionProgress" hidden>
+          <div class="progress-heading"><span class="ingestion-state" id="ingestionState" role="status">Preparado</span><span id="documentPercent">0%</span></div>
+          <progress id="documentProgress" max="1" value="0" aria-label="Bloques confirmados del documento"></progress>
+          <strong id="documentProgressTitle"></strong>
+          <span id="documentProgressDetail"></span>
+        </div>
+        <div class="document-actions">
+          <button class="primary-button" id="documentSubmit" type="submit" disabled>Procesar documento</button>
+          <button class="text-button" id="documentPause" type="button" hidden>Pausar</button>
+        </div>
+      </form>
+      <p id="documentStatus" role="status" aria-live="polite"></p>
+      <p class="document-footnote">El documento estará disponible para consultas cuando termine el procesamiento. Mientras tanto, el progreso se guarda en este navegador.</p>
+    </dialog>
   </body>
 </html>

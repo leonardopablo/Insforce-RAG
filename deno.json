@@ -1,0 +1,9 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "check": "deno check functions/ingest.ts functions/ask.ts",
+    "test": "deno test --allow-env=RAG_API_KEY,GEMINI_API_KEY,INSFORGE_BASE_URL,API_KEY tests/rag_test.ts"
+  },
+  "fmt": { "lineWidth": 110 },
+  "compilerOptions": { "strict": true }
+}

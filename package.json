@@ -1,0 +1,10 @@
+{
+  "name": "insforce-rag-ui",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-ui.ps1",
+    "test": "node --test tests/server.test.mjs"
+  },
+  "engines": { "node": ">=18.16" }
+}
