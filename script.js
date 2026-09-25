@@ -85,6 +85,192 @@ function renderHistory() {
   }
   $('#chatHistory').replaceChildren(group);
 }
+function normalizeTrace(value) {
+  if (!value || (value.version !== undefined && value.version !== 1) || !Array.isArray(value.steps) || !Array.isArray(value.retrieval)) return null;
+  const allowedSteps = new Set(['routing', 'embedding', 'retrieval', 'generation', 'grounding']);
+  const steps = value.steps.slice(0, 5).filter((step) => step && allowedSteps.has(step.key)).map((step) => ({
+    key: step.key,
+    status: step.status === 'done' ? 'done' : 'skipped',
+    durationMs: Number.isFinite(Number(step.durationMs)) ? Math.max(0, Number(step.durationMs)) : null,
+    dimensions: step.key === 'embedding' && Number(step.dimensions) === 1536 ? 1536 : null,
+  }));
+  const retrieval = value.retrieval.slice(0, 5).filter((item) => item && Number.isFinite(Number(item.score))).map((item, index) => ({
+    rank: index + 1,
+    source: typeof item.source === 'string' ? item.source.slice(0, 500) : 'Documento',
+    chunkIndex: Number.isInteger(Number(item.chunkIndex)) ? Number(item.chunkIndex) : null,
+    score: Math.max(-1, Math.min(1, Number(item.score))),
+    cited: item.cited === true,
+  }));
+  return {
+    version: 1,
+    route: typeof value.route === 'string' ? value.route : 'documents',
+    totalMs: Number.isFinite(Number(value.totalMs)) ? Math.max(0, Number(value.totalMs)) : null,
+    steps,
+    retrieval,
+  };
+}
+function mountVectorScene(canvas, candidates) {
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const vectors = candidates.map((item, index) => {
+    const radial = Math.sqrt(Math.max(0, 1 - item.score ** 2));
+    const azimuth = index * Math.PI * (3 - Math.sqrt(5));
+    return { ...item, vector: [item.score, radial * Math.cos(azimuth), radial * Math.sin(azimuth)] };
+  });
+  let yaw = -0.35;
+  let pitch = 0.28;
+  let zoom = 1;
+  let drag = null;
+  let animationFrame = 0;
+  const rotate = ([x, y, z]) => {
+    const x1 = x * Math.cos(yaw) + z * Math.sin(yaw);
+    const z1 = -x * Math.sin(yaw) + z * Math.cos(yaw);
+    return [x1, y * Math.cos(pitch) - z1 * Math.sin(pitch), y * Math.sin(pitch) + z1 * Math.cos(pitch)];
+  };
+  function draw(progress = 1) {
+    const width = Math.max(280, canvas.clientWidth || 600);
+    const height = Math.max(260, canvas.clientHeight || 330);
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+      canvas.width = width * ratio;
+      canvas.height = height * ratio;
+    }
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    const origin = [width * .45, height * .54];
+    const scale = Math.min(width * .31, height * .39) * zoom;
+    const project = (point) => {
+      const [x, y, z] = rotate(point);
+      const perspective = 1 / (1.8 - z * .28);
+      return [origin[0] + x * scale * perspective, origin[1] - y * scale * perspective, z];
+    };
+    const line = (from, to, color, lineWidth = 1, dash = []) => {
+      const a = project(from); const b = project(to);
+      context.beginPath(); context.moveTo(a[0], a[1]); context.lineTo(b[0], b[1]);
+      context.strokeStyle = color; context.lineWidth = lineWidth; context.setLineDash(dash); context.stroke();
+      context.setLineDash([]);
+    };
+    context.fillStyle = '#0f1117';
+    context.fillRect(0, 0, width, height);
+    const glow = context.createRadialGradient(origin[0], origin[1], 0, origin[0], origin[1], scale * 1.15);
+    glow.addColorStop(0, '#78a7ff12'); glow.addColorStop(1, '#78a7ff00');
+    context.fillStyle = glow; context.fillRect(0, 0, width, height);
+    line([-1, 0, 0], [1.18, 0, 0], '#ffffff18');
+    line([0, -1, 0], [0, 1, 0], '#ffffff12');
+    line([0, 0, -1], [0, 0, 1], '#ffffff12');
+    const query = [1.05 * progress, 0, 0];
+    line([0, 0, 0], query, '#78a7ff', 3);
+    const queryEnd = project(query);
+    context.fillStyle = '#a9c6ff'; context.beginPath(); context.arc(queryEnd[0], queryEnd[1], 5, 0, Math.PI * 2); context.fill();
+    context.font = '600 11px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    context.fillText('CONSULTA', queryEnd[0] + 9, queryEnd[1] - 8);
+    vectors.forEach((item, index) => {
+      const vector = item.vector.map((coordinate) => coordinate * progress);
+      const color = item.cited ? '#8fd8b2' : '#8793a8';
+      line([0, 0, 0], vector, color, item.cited ? 2.5 : 1.5);
+      const angle = Math.acos(item.score);
+      const perpendicular = [0, item.vector[1], item.vector[2]];
+      const length = Math.hypot(perpendicular[1], perpendicular[2]) || 1;
+      const unit = [0, perpendicular[1] / length, perpendicular[2] / length];
+      context.beginPath();
+      for (let sample = 0; sample <= 18; sample++) {
+        const part = angle * sample / 18;
+        const point = [Math.cos(part) * .34, Math.sin(part) * unit[1] * .34, Math.sin(part) * unit[2] * .34];
+        const projected = project(point);
+        if (!sample) context.moveTo(projected[0], projected[1]); else context.lineTo(projected[0], projected[1]);
+      }
+      context.strokeStyle = `${color}99`; context.lineWidth = 1; context.stroke();
+      const endpoint = project(vector);
+      context.fillStyle = color; context.beginPath(); context.arc(endpoint[0], endpoint[1], item.cited ? 5 : 4, 0, Math.PI * 2); context.fill();
+      context.fillStyle = item.cited ? '#c9f4dc' : '#bdc5d2';
+      context.font = '600 11px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+      context.fillText(`F${index + 1}`, endpoint[0] + 7, endpoint[1] - 6);
+    });
+    const center = project([0, 0, 0]);
+    context.fillStyle = '#eef3ff'; context.beginPath(); context.arc(center[0], center[1], 4, 0, Math.PI * 2); context.fill();
+  }
+  function animate(start) {
+    const progress = reduceMotion ? 1 : Math.min(1, (performance.now() - start) / 520);
+    draw(1 - (1 - progress) ** 3);
+    if (progress < 1) animationFrame = requestAnimationFrame(() => animate(start));
+  }
+  const redraw = () => { cancelAnimationFrame(animationFrame); draw(); };
+  canvas.addEventListener('pointerdown', (event) => { drag = [event.clientX, event.clientY]; canvas.setPointerCapture(event.pointerId); });
+  canvas.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+    yaw += (event.clientX - drag[0]) * .009; pitch = Math.max(-1.2, Math.min(1.2, pitch + (event.clientY - drag[1]) * .009));
+    drag = [event.clientX, event.clientY]; redraw();
+  });
+  canvas.addEventListener('pointerup', () => { drag = null; });
+  canvas.addEventListener('pointercancel', () => { drag = null; });
+  canvas.addEventListener('wheel', (event) => { event.preventDefault(); zoom = Math.max(.7, Math.min(1.45, zoom - event.deltaY * .001)); redraw(); }, { passive: false });
+  canvas.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '='].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'ArrowLeft') yaw -= .12;
+    if (event.key === 'ArrowRight') yaw += .12;
+    if (event.key === 'ArrowUp') pitch -= .12;
+    if (event.key === 'ArrowDown') pitch += .12;
+    if (event.key === '+' || event.key === '=') zoom = Math.min(1.45, zoom + .1);
+    if (event.key === '-') zoom = Math.max(.7, zoom - .1);
+    redraw();
+  });
+  animate(performance.now());
+}
+function renderRagTrace(trace) {
+  const details = el('details', 'rag-trace');
+  const summary = el('summary');
+  summary.append(el('span', 'rag-trace__symbol', '3D'), el('span', '', 'Explorar cómo razonó el RAG'));
+  if (trace.totalMs !== null) summary.append(el('small', '', `${trace.totalMs.toLocaleString('es-PE')} ms`));
+  details.append(summary);
+  const content = el('div', 'rag-trace__content');
+  const labels = { routing: 'Interpretar mensaje', embedding: 'Crear embedding', retrieval: 'Buscar fragmentos', generation: 'Generar respuesta', grounding: 'Validar citas' };
+  const timeline = el('ol', 'rag-timeline');
+  trace.steps.forEach((step) => {
+    const item = el('li', `rag-step rag-step--${step.status}`);
+    item.append(el('span', 'rag-step__dot'), el('strong', '', labels[step.key] || step.key));
+    const detail = step.status === 'done'
+      ? `${step.durationMs === null ? 'Completado' : `${Math.round(step.durationMs)} ms`}${step.dimensions ? ` · ${step.dimensions} dimensiones` : ''}`
+      : 'No fue necesario';
+    item.append(el('small', '', detail)); timeline.append(item);
+  });
+  content.append(timeline);
+  if (trace.retrieval.length) {
+    const visual = el('section', 'vector-lab');
+    const heading = el('div', 'vector-lab__heading');
+    heading.append(el('div', '', 'Espacio vectorial angular'), el('small', '', 'Arrastra para rotar · Rueda para acercar'));
+    const canvas = el('canvas', 'vector-canvas');
+    canvas.tabIndex = 0;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', 'Representación tridimensional de la consulta y los cinco fragmentos recuperados. Usa las flechas para rotar y más o menos para acercar.');
+    const legend = el('div', 'vector-legend');
+    legend.append(el('span', 'vector-legend__query', 'Consulta'), el('span', 'vector-legend__cited', 'Fragmento citado'), el('span', 'vector-legend__candidate', 'Candidato'));
+    const candidates = el('ol', 'vector-candidates');
+    trace.retrieval.forEach((item) => {
+      const angle = Math.acos(item.score) * 180 / Math.PI;
+      const row = el('li', item.cited ? 'is-cited' : '');
+      row.append(el('span', 'vector-rank', `F${item.rank}`));
+      const description = el('span', 'vector-description');
+      description.append(el('strong', '', item.source), el('small', '', `Fragmento ${item.chunkIndex === null ? '—' : item.chunkIndex + 1}${item.cited ? ' · utilizado en la respuesta' : ''}`));
+      row.append(description, el('code', '', `cos ${item.score.toFixed(3)}`), el('span', 'vector-angle', `${angle.toFixed(1)}°`));
+      candidates.append(row);
+    });
+    const note = el('p', 'vector-note', 'Proyección didáctica: cada ángulo respecto a la consulta es real. La separación alrededor del eje solo permite distinguir vectores; no reproduce literalmente las 1536 dimensiones ni representa un porcentaje de certeza.');
+    visual.append(heading, canvas, legend, candidates, note);
+    content.append(visual);
+    let mounted = false;
+    details.addEventListener('toggle', () => {
+      if (details.open && !mounted) { mounted = true; requestAnimationFrame(() => mountVectorScene(canvas, trace.retrieval)); }
+    });
+  } else {
+    content.append(el('p', 'vector-note', trace.route === 'documents'
+      ? 'La búsqueda no recuperó fragmentos para representar.'
+      : 'Este mensaje se resolvió como conversación; no fue necesario crear embeddings ni consultar el espacio vectorial.'));
+  }
+  details.append(content);
+  return details;
+}
 function renderMessage(message) {
   const article = el('article', `message message--${message.role}`);
   const avatar = el('div', 'message__avatar', message.role === 'assistant' ? '' : 'TÚ');
@@ -129,6 +315,8 @@ function renderMessage(message) {
       }
       body.append(details);
     }
+    const trace = normalizeTrace(message.trace);
+    if (trace) body.append(renderRagTrace(trace));
   }
   article.append(avatar, body);
   return article;
@@ -149,6 +337,9 @@ const errorMessage = (data) => ({
   GEMINI_QUOTA_EXCEEDED: 'La cuota de Gemini está agotada. Espera a que se restablezca para volver a preguntar.',
   GEMINI_API_KEY_NOT_CONFIGURED: 'Falta configurar la clave de Gemini en InsForge. Ejecuta scripts/configure-gemini.ps1.',
   GEMINI_MODEL_UNAVAILABLE: 'El modelo de Gemini ya no está disponible. Es necesario actualizar la configuración del servicio.',
+  GEMINI_UNAVAILABLE: 'Gemini no tiene capacidad disponible en este momento. Inténtalo nuevamente más tarde.',
+  GEMINI_TIMEOUT: 'Gemini tardó demasiado en responder. Inténtalo nuevamente en unos segundos.',
+  GATEWAY_TIMEOUT: 'La consulta superó el tiempo disponible. Inténtalo nuevamente en unos segundos.',
   LOCAL_NOT_CONFIGURED: 'Inicia la interfaz con scripts/start-ui.ps1 para conectar con tus documentos.',
   UNAUTHORIZED: 'La conexión con InsForge necesita actualizarse. Reinicia el servidor con scripts/start-ui.ps1.',
 }[data?.code] || (typeof data?.error === 'string' ? data.error : 'No se pudo completar la solicitud. Inténtalo de nuevo.'));
@@ -201,6 +392,7 @@ async function ask(question, retryMessage = null) {
     answer.text = data.answer;
     answer.sources = data.sources;
     answer.kind = typeof data.kind === 'string' ? data.kind : undefined;
+    answer.trace = normalizeTrace(data.trace);
     answer.status = 'done';
   } catch (error) {
     answer.status = controller.signal.aborted ? 'cancelled' : 'error';

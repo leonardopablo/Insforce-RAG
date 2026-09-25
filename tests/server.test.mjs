@@ -45,14 +45,17 @@ test('cross-origin requests and untrusted hosts cannot access the bridge', async
 });
 test('ask and resumable ingestion forward JSON with server-side credentials only', async (t) => {
   const calls = [];
+  const trace = { version: 1, route: 'documents', totalMs: 12, steps: [], retrieval: [] };
   const base = await fixture(t, async (url, options) => {
     calls.push({ url, options });
-    return Response.json(url.endsWith('ingest-start') ? { document: { id: 1 } } : url.endsWith('ask') ? { answer: 'Respuesta', sources: [] } : { status: 'ok' }, { status: url.endsWith('ingest-start') ? 201 : 200 });
+    return Response.json(url.endsWith('ingest-start') ? { document: { id: 1 } } : url.endsWith('ask') ? { answer: 'Respuesta', sources: [], trace } : { status: 'ok' }, { status: url.endsWith('ingest-start') ? 201 : 200 });
   });
   for (const action of ['ask', 'ingest/start', 'ingest/block', 'ingest/complete']) {
     const res = await fetch(`${base}/api/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'Consulta', text: 'Texto', source: 'test' }) });
     assert.equal(res.status, action === 'ingest/start' ? 201 : 200);
-    assert(!(await res.text()).includes('unit-test-secret'));
+    const responseText = await res.text();
+    assert(!responseText.includes('unit-test-secret'));
+    if (action === 'ask') assert.deepEqual(JSON.parse(responseText).trace, trace);
   }
   assert.equal(calls.length, 4);
   assert.equal(calls[0].url, 'https://5a4bnskj.function2.insforge.app/ask');
@@ -68,6 +71,22 @@ test('provider quota errors retain their status and safe code', async (t) => {
   assert.equal(res.status, 429);
   assert.equal(res.headers.get('set-cookie'), null);
   assert.deepEqual(await res.json(), { code: 'GEMINI_QUOTA_EXCEEDED', error: 'Cuota agotada' });
+});
+test('non-JSON gateway timeouts become actionable JSON', async (t) => {
+  const base = await fixture(t, async () => new Response('<html>private gateway response</html>', {
+    status: 504,
+    headers: { 'Content-Type': 'text/html' },
+  }));
+  const res = await fetch(base + '/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(res.status, 504);
+  assert.deepEqual(await res.json(), {
+    code: 'GATEWAY_TIMEOUT',
+    error: 'La consulta tardó demasiado en el servicio de IA. Inténtalo de nuevo.',
+  });
 });
 test('invalid bodies are rejected without calling the provider', async (t) => {
   let calls = 0;

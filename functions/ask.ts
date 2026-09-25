@@ -6,7 +6,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, x-rag-api-key",
 };
 const EMBEDDING_MODEL = "gemini-embedding-2";
-const CHAT_MODEL = "gemini-3.5-flash-lite";
+const CHAT_MODEL = "gemini-3.6-flash";
 export const NO_INFORMATION = "no tengo esa información en mis documentos";
 type Match = {
   id: number | string;
@@ -18,6 +18,8 @@ type Match = {
 type Citation = { chunk: number; quote: string };
 type Route = "conversation" | "help" | "clarification" | "documents";
 type RouteResult = { route: Route; answer: string };
+type TraceKey = "routing" | "embedding" | "retrieval" | "generation" | "grounding";
+type TraceTimings = Partial<Record<TraceKey, number>>;
 
 class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -41,10 +43,10 @@ function env(name: string): string {
   }
   return value;
 }
-async function gemini(model: string, action: string, body: unknown): Promise<any> {
+async function gemini(model: string, action: string, body: unknown, timeoutMs = 14_000): Promise<any> {
   const key = env("GEMINI_API_KEY");
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:${action}`,
@@ -56,7 +58,19 @@ async function gemini(model: string, action: string, body: unknown): Promise<any
       },
     );
     if (!response.ok) {
-      await response.body?.cancel();
+      let providerCode = "UNKNOWN";
+      try {
+        const providerError = await response.json();
+        if (typeof providerError?.error?.status === "string") providerCode = providerError.error.status;
+      } catch {
+        await response.body?.cancel();
+      }
+      console.error("gemini: upstream request failed", JSON.stringify({
+        model,
+        action,
+        status: response.status,
+        providerCode,
+      }));
       if (response.status === 404) {
         throw new ApiError(
           502,
@@ -69,6 +83,13 @@ async function gemini(model: string, action: string, body: unknown): Promise<any
           429,
           "GEMINI_QUOTA_EXCEEDED",
           "Cuota de Gemini agotada. Espera al reinicio de tu cuota; no se usara otro modelo.",
+        );
+      }
+      if (response.status === 503) {
+        throw new ApiError(
+          503,
+          "GEMINI_UNAVAILABLE",
+          "Gemini no tiene capacidad disponible en este momento. Intenta mas tarde.",
         );
       }
       if ([400, 401, 403].includes(response.status)) {
@@ -144,8 +165,47 @@ export function conversationRoute(value: unknown): RouteResult {
   return { route: result.route as Route, answer };
 }
 
+function elapsed(start: number): number {
+  return Math.max(0, Math.round(performance.now() - start));
+}
+
+function ragTrace(
+  route: Route,
+  startedAt: number,
+  timings: TraceTimings,
+  matches: Match[] = [],
+  citedIds: Array<number | string> = [],
+) {
+  const cited = new Set(citedIds.map(String));
+  const keys: TraceKey[] = ["routing", "embedding", "retrieval", "generation", "grounding"];
+  return {
+    version: 1,
+    route,
+    totalMs: elapsed(startedAt),
+    steps: keys.map((key) => ({
+      key,
+      status: timings[key] === undefined ? "skipped" : "done",
+      ...(timings[key] === undefined ? {} : { durationMs: timings[key] }),
+      ...(key === "embedding" && timings[key] !== undefined ? { dimensions: 1536 } : {}),
+    })),
+    retrieval: matches.slice(0, 5).map((item, index) => {
+      const score = Number(item.score);
+      return {
+        rank: index + 1,
+        id: item.id,
+        source: item.source,
+        chunkIndex: item.chunk_index,
+        score: Number.isFinite(score) ? Math.max(-1, Math.min(1, score)) : 0,
+        cited: cited.has(String(item.id)),
+      };
+    }),
+  };
+}
+
 async function routeQuestion(question: string): Promise<RouteResult> {
-  const completion = await gemini(CHAT_MODEL, "generateContent", {
+  let completion;
+  try {
+    completion = await gemini(CHAT_MODEL, "generateContent", {
     systemInstruction: {
       parts: [{
         text: [
@@ -173,7 +233,15 @@ async function routeQuestion(question: string): Promise<RouteResult> {
         },
       },
     },
-  });
+    }, 9_000);
+  } catch (error) {
+    // Routing is advisory. On a slow model, fail closed into the grounded path
+    // instead of consuming the edge function's complete request budget.
+    if (error instanceof ApiError && error.code === "GEMINI_TIMEOUT") {
+      return { route: "documents", answer: "" };
+    }
+    throw error;
+  }
   const candidate = completion.candidates?.[0];
   if (!candidate || candidate.finishReason !== "STOP") return { route: "documents", answer: "" };
   const text = candidate.content?.parts?.filter((part: { thought?: boolean; text?: string }) =>
@@ -189,6 +257,8 @@ async function routeQuestion(question: string): Promise<RouteResult> {
 export default async function ask(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
+  const startedAt = performance.now();
+  const timings: TraceTimings = {};
   try {
     if (req.headers.get("x-rag-api-key")?.trim() !== env("RAG_API_KEY")) {
       return json({ error: "Unauthorized", code: "UNAUTHORIZED" }, 401);
@@ -212,14 +282,23 @@ export default async function ask(req: Request): Promise<Response> {
     if (question.length > 4000) {
       throw new ApiError(413, "INPUT_TOO_LARGE", "question no debe superar 4000 caracteres.");
     }
+    let stepStartedAt = performance.now();
     const route = await routeQuestion(question);
+    timings.routing = elapsed(stepStartedAt);
     if (route.route !== "documents") {
-      return json({ answer: route.answer, sources: [], model: CHAT_MODEL, kind: route.route });
+      return json({
+        answer: route.answer,
+        sources: [],
+        model: CHAT_MODEL,
+        kind: route.route,
+        trace: ragTrace(route.route, startedAt, timings),
+      });
     }
+    stepStartedAt = performance.now();
     const embedding = await gemini(EMBEDDING_MODEL, "embedContent", {
       content: { parts: [{ text: `task: question answering | query: ${question}` }] },
       embedContentConfig: { outputDimensionality: 1536, autoTruncate: false },
-    });
+    }, 5_000);
     const vector = embedding.embedding?.values;
     if (
       !Array.isArray(vector) || vector.length !== 1536 ||
@@ -227,17 +306,27 @@ export default async function ask(req: Request): Promise<Response> {
     ) {
       throw new ApiError(502, "INVALID_EMBEDDINGS", "Gemini devolvio un embedding de consulta invalido.");
     }
+    timings.embedding = elapsed(stepStartedAt);
     const admin = createAdminClient({ baseUrl: env("INSFORGE_BASE_URL"), apiKey: env("API_KEY") });
+    stepStartedAt = performance.now();
     const { data, error } = await admin.database.rpc("match_documents", {
       query_embedding: vector,
       match_count: 5,
       match_threshold: -1,
     });
     if (error) throw new ApiError(500, "DATABASE_ERROR", "No se pudieron recuperar los documentos.");
+    timings.retrieval = elapsed(stepStartedAt);
     const matches = (data ?? []) as Match[];
     if (!matches.length) {
-      return json({ answer: NO_INFORMATION, sources: [], model: CHAT_MODEL, kind: "not_found" });
+      return json({
+        answer: NO_INFORMATION,
+        sources: [],
+        model: CHAT_MODEL,
+        kind: "not_found",
+        trace: ragTrace("documents", startedAt, timings),
+      });
     }
+    stepStartedAt = performance.now();
     const completion = await gemini(CHAT_MODEL, "generateContent", {
       systemInstruction: {
         parts: [{
@@ -286,15 +375,20 @@ export default async function ask(req: Request): Promise<Response> {
           },
         },
       },
-    });
+    }, 14_000);
     const candidate = completion.candidates?.[0];
     if (!candidate || candidate.finishReason !== "STOP") {
+      console.error("ask: incomplete Gemini answer", JSON.stringify({
+        model: CHAT_MODEL,
+        finishReason: candidate?.finishReason ?? "MISSING_CANDIDATE",
+      }));
       throw new ApiError(
         502,
         "GEMINI_INCOMPLETE_ANSWER",
         "Gemini no pudo completar la respuesta. Intenta reformular la pregunta.",
       );
     }
+    timings.generation = elapsed(stepStartedAt);
     const answerText = candidate.content?.parts?.filter((p: { thought?: boolean; text?: string }) =>
       !p.thought && typeof p.text === "string"
     )
@@ -303,9 +397,16 @@ export default async function ask(req: Request): Promise<Response> {
     try {
       result = JSON.parse(answerText);
     } catch {
+      console.error("ask: invalid Gemini JSON", JSON.stringify({ model: CHAT_MODEL }));
       throw new ApiError(502, "GEMINI_INVALID_ANSWER", "Gemini devolvio una respuesta no valida.");
     }
-    return json(groundedResult(result, matches));
+    stepStartedAt = performance.now();
+    const grounded = groundedResult(result, matches);
+    timings.grounding = elapsed(stepStartedAt);
+    return json({
+      ...grounded,
+      trace: ragTrace("documents", startedAt, timings, matches, grounded.sources.map((source: any) => source.id)),
+    });
   } catch (error) {
     if (error instanceof ApiError) return json({ error: error.message, code: error.code }, error.status);
     console.error("ask: unexpected internal error");

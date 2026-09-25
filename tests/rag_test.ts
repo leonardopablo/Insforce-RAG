@@ -224,12 +224,21 @@ Deno.test("ask: grounded answer, retrieval top 5 and cited sources", () =>
     assert.equal(result.sources[0].source, "manual");
     assert.equal(result.sources[0].score, 0.85);
     assert.equal(result.kind, "document");
+    assert.equal(result.trace.version, 1);
+    assert.equal(result.trace.route, "documents");
+    assert.equal(result.trace.retrieval.length, 1);
+    assert.equal(result.trace.retrieval[0].score, 0.85);
+    assert.equal(result.trace.retrieval[0].cited, true);
+    assert(!("content" in result.trace.retrieval[0]));
+    assert(!("embedding" in result.trace.retrieval[0]));
+    assert(result.trace.steps.every((step: any) => step.status === "done"));
+    assert(result.trace.steps.every((step: any) => step.durationMs >= 0));
     assert.equal(calls.length, 4);
     assert.equal(calls[2].body.match_count, 5);
     assert.equal(calls[2].body.match_threshold, -1);
     assert(calls[1].body.content.parts[0].text.startsWith("task: question answering | query: "));
     assert(calls[0].body.systemInstruction.parts[0].text.includes("aunque incluya un saludo"));
-    assert(calls[3].url.includes("gemini-3.5-flash-lite"));
+    assert(calls[3].url.includes("gemini-3.6-flash"));
   }));
 Deno.test("ask: social conversation is natural and skips embeddings and database", () =>
   withMock(async (calls) => {
@@ -237,6 +246,10 @@ Deno.test("ask: social conversation is natural and skips embeddings and database
     assert.equal(result.answer, "¡Hola! ¿Qué te gustaría consultar hoy?");
     assert.equal(result.kind, "conversation");
     assert.deepEqual(result.sources, []);
+    assert.equal(result.trace.route, "conversation");
+    assert.equal(result.trace.steps[0].status, "done");
+    assert(result.trace.steps.slice(1).every((step: any) => step.status === "skipped"));
+    assert.deepEqual(result.trace.retrieval, []);
     assert.equal(calls.length, 1);
   }, { route: { route: "conversation", answer: "¡Hola! ¿Qué te gustaría consultar hoy?" } }));
 Deno.test("conversation router fails closed to document retrieval", () => {
@@ -257,12 +270,21 @@ Deno.test("ask: retired model is reported explicitly", () =>
     assert.equal(response.status, 502);
     assert.equal((await response.json()).code, "GEMINI_MODEL_UNAVAILABLE");
   }, { upstreamStatus: 404 }));
+Deno.test("ask: provider capacity errors retain status 503", () =>
+  withMock(async () => {
+    const response = await ask(request({ question: "Pregunta" }));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, "GEMINI_UNAVAILABLE");
+  }, { upstreamStatus: 503 }));
 Deno.test("ask: empty corpus skips generation", () =>
   withMock(async (calls) => {
     const result = await (await ask(request({ question: "Pregunta" }))).json();
     assert.equal(result.answer, NO_INFORMATION);
     assert.deepEqual(result.sources, []);
     assert.equal(result.kind, "not_found");
+    assert.equal(result.trace.steps.find((step: any) => step.key === "retrieval").status, "done");
+    assert.equal(result.trace.steps.find((step: any) => step.key === "generation").status, "skipped");
+    assert.deepEqual(result.trace.retrieval, []);
     assert.equal(calls.length, 3);
   }, { noMatches: true }));
 Deno.test("ask: absent information returns exact refusal without sources", () =>

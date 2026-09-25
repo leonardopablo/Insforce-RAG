@@ -15,6 +15,7 @@ Abre **http://localhost:5173**. El inicio recupera `RAG_API_KEY` con tu sesión 
 
 - Escribe una pregunta y pulsa Enter; Shift+Enter añade una línea.
 - Abre **Ver fuentes y citas** debajo de una respuesta para revisar documento, fragmento, similitud coseno y citas textuales. La similitud no es un porcentaje de certeza.
+- Abre **Explorar cómo razonó el RAG** para ver las etapas y duraciones reales de la consulta, el top 5 recuperado y una representación 3D interactiva de sus ángulos coseno. Puedes arrastrar para rotar, usar la rueda para acercar o navegar con flechas y las teclas `+`/`-`.
 - Usa el clip **Añadir documento** para cargar un `.txt` UTF-8 de hasta **10 MB**. El límite puede bajarse a 5 MB con `MAX_TXT_MB=5` antes de iniciar la UI.
 - La UI calcula SHA-256 para evitar duplicados, divide el archivo en bloques de aproximadamente 100000 caracteres y muestra bloques y fragmentos confirmados. Si se interrumpe, conserva temporalmente el TXT en IndexedDB y continúa desde el último bloque confirmado al reabrir la página.
 - Puedes detener una consulta, reintentar errores y crear, descargar o eliminar conversaciones. El historial se guarda en este navegador (hasta 30 conversaciones y los últimos 100 mensajes de cada una); eliminar un chat no elimina documentos de InsForge.
@@ -26,10 +27,11 @@ La interfaz llama a `/api/ask`, `/api/ingest/start`, `/api/ingest/block` y `/api
 Para validar la conexión local sin llamadas reales a Gemini: `npm test`. Las pruebas del backend siguen disponibles con `deno task test`.
 
 - Embeddings: `gemini-embedding-2`, 1536 dimensiones. No mezclar con los vectores de OpenAI.
-- Respuestas: `gemini-3.5-flash-lite`. No hay modelos alternativos ni reintentos automaticos que generen cargos. El anterior `gemini-2.5-flash-lite` fue retirado para usuarios nuevos por Google.
+- Respuestas: `gemini-3.6-flash`. No hay modelos alternativos ni reintentos automaticos que generen cargos. `gemini-3.5-flash-lite` fue retirado de la configuración porque Google devolvía `503` de forma sostenida para la clave del proyecto.
 - Ingesta: solo TXT UTF-8. Cada bloque se convierte en chunks de aproximadamente 500 tokens con overlap de 80 y los embeddings se solicitan en grupos de 20. Se estima con caracteres; no es un conteo exacto del tokenizer de Gemini.
 - Reanudación: InsForge confirma cada grupo y cada bloque. El documento pasa de `processing` a `ready` únicamente cuando todos los bloques están completos. El TXT original no se guarda en InsForge; la copia local se elimina de IndexedDB al finalizar.
 - Consulta: los 5 chunks mas similares; respuesta con fuentes, score de similitud coseno y citas verificadas contra el texto original.
+- Traza didáctica: cada respuesta incluye tiempos compactos del pipeline y metadatos del top 5, sin enviar embeddings ni el contenido de fragmentos no citados. La vista 3D conserva el ángulo real entre cada candidato y la consulta; su distribución alrededor del eje es ilustrativa y no reproduce literalmente las 1536 dimensiones.
 - Negativa: `no tengo esa información en mis documentos`, sin fuentes, si el contexto es insuficiente.
 - Conversación: una primera llamada a Gemini clasifica el mensaje como conversación social, ayuda, aclaración o consulta documental. Una salida inválida o dudosa se dirige al flujo documental; la vía conversacional no puede aportar datos de los documentos ni conocimientos externos.
 - La tabla y el RPC son privados. Ambos endpoints requieren `x-rag-api-key`.
@@ -117,6 +119,6 @@ Las pruebas locales simulan Gemini y la base de datos: no usan claves reales, no
 
 La migracion `20260916033634_use-gemini-rag.sql` conserva datos anteriores y restringe `match_documents` a vectores `gemini-embedding-2`. Si habia datos de otro modelo, vuelve a ingestarlos; la funcion no compara espacios de embeddings incompatibles.
 
-Errores principales: `401 UNAUTHORIZED`, `400 INVALID_INPUT/INVALID_JSON`, `413 INPUT_TOO_LARGE`, `503 GEMINI_API_KEY_NOT_CONFIGURED`, `429 GEMINI_QUOTA_EXCEEDED`, `502 GEMINI_REQUEST_REJECTED` o `504 GEMINI_TIMEOUT`. No se devuelven detalles sensibles del proveedor ni de la base de datos.
+Errores principales: `401 UNAUTHORIZED`, `400 INVALID_INPUT/INVALID_JSON`, `413 INPUT_TOO_LARGE`, `503 GEMINI_API_KEY_NOT_CONFIGURED`, `503 GEMINI_UNAVAILABLE`, `429 GEMINI_QUOTA_EXCEEDED`, `502 GEMINI_REQUEST_REJECTED` o `504 GEMINI_TIMEOUT`. No se devuelven detalles sensibles del proveedor ni de la base de datos.
 
 Referencias: [Embeddings](https://ai.google.dev/gemini-api/docs/embeddings), [API de embeddings](https://ai.google.dev/api/embeddings), [salida estructurada](https://ai.google.dev/gemini-api/docs/structured-output).

@@ -97,7 +97,15 @@ export function createApp({ ragKey = process.env.RAG_API_KEY?.trim(), fetchImpl 
       });
       let result;
       try { result = await upstream.json(); }
-      catch { return reply(502, { code: 'UPSTREAM_ERROR', error: 'El servicio devolvió una respuesta no válida.' }); }
+      catch {
+        const gatewayStatus = [502, 503, 504].includes(upstream.status) ? upstream.status : 502;
+        return reply(gatewayStatus, {
+          code: gatewayStatus === 504 ? 'GATEWAY_TIMEOUT' : 'UPSTREAM_ERROR',
+          error: gatewayStatus === 504
+            ? 'La consulta tardó demasiado en el servicio de IA. Inténtalo de nuevo.'
+            : 'El servicio devolvió una respuesta no válida.',
+        });
+      }
       // Do not forward upstream headers, cookies or credentials.
       if (upstream.ok) reply(upstream.status, result);
       else reply(upstream.status, { code: result.code ?? 'UPSTREAM_ERROR', error: result.error ?? 'El servicio no pudo completar la solicitud.' });
