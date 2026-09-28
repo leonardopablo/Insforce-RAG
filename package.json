@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-ui.ps1",
-    "test": "node --test tests/server.test.mjs"
+    "test": "node --test tests/server.test.mjs",
+    "check": "deno task check",
+    "test:backend": "deno task test",
+    "verify": "npm test && deno task check && deno task test"
   },
   "engines": { "node": ">=18.16" }
 }
