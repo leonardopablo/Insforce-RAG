@@ -65,12 +65,31 @@ test('ask and resumable ingestion forward JSON with server-side credentials only
   assert.equal(calls[0].options.headers['x-rag-api-key'], 'unit-test-secret');
   assert.equal(JSON.parse(calls[0].options.body).question, 'Consulta');
 });
-test('provider quota errors retain their status and safe code', async (t) => {
-  const base = await fixture(t, async () => Response.json({ code: 'GEMINI_QUOTA_EXCEEDED', error: 'Cuota agotada', debug: 'private' }, { status: 429, headers: { 'set-cookie': 'private=1' } }));
-  const res = await fetch(base + '/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  assert.equal(res.status, 429);
-  assert.equal(res.headers.get('set-cookie'), null);
-  assert.deepEqual(await res.json(), { code: 'GEMINI_QUOTA_EXCEEDED', error: 'Cuota agotada' });
+test('Groq failures pass through the bridge with only status and safe fields', async (t) => {
+  const failures = [
+    { status: 429, code: 'GROQ_RATE_LIMITED', error: 'Límite de Groq alcanzado.' },
+    { status: 503, code: 'GROQ_UNAVAILABLE', error: 'Groq no está disponible.' },
+    { status: 502, code: 'GROQ_INCOMPLETE_ANSWER', error: 'Groq no completó la respuesta.' },
+  ];
+  let call = 0;
+  const base = await fixture(t, async () => {
+    const failure = failures[call++];
+    return Response.json({ ...failure, debug: 'private' }, {
+      status: failure.status,
+      headers: { 'set-cookie': 'private=1', 'x-provider-secret': 'private' },
+    });
+  });
+  for (const failure of failures) {
+    const res = await fetch(base + '/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    assert.equal(res.status, failure.status);
+    assert.equal(res.headers.get('set-cookie'), null);
+    assert.equal(res.headers.get('x-provider-secret'), null);
+    assert.deepEqual(await res.json(), { code: failure.code, error: failure.error });
+  }
 });
 test('non-JSON gateway timeouts become actionable JSON', async (t) => {
   const base = await fixture(t, async () => new Response('<html>private gateway response</html>', {

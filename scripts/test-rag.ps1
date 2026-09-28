@@ -25,6 +25,11 @@ try {
                 throw 'Falta GEMINI_API_KEY. Ejecuta primero .\scripts\configure-gemini.ps1'
             }
             if ($detail -match 'GEMINI_QUOTA_EXCEEDED') { throw 'Cuota gratuita de Gemini agotada. Espera al reinicio de la cuota.' }
+            if ($detail -match 'GROQ_API_KEY_NOT_CONFIGURED') {
+                throw 'Falta GROQ_API_KEY. Ejecuta primero .\scripts\configure-groq.ps1'
+            }
+            if ($detail -match 'GROQ_RATE_LIMITED') { throw 'Limite gratuito de Groq agotado. Espera al reinicio de la cuota.' }
+            if ($detail -match 'GROQ_UNAVAILABLE') { throw 'Groq no tiene capacidad disponible. Intenta mas tarde.' }
             throw "La solicitud a $Slug fallo. Respuesta: $detail"
         }
     }

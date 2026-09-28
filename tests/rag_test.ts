@@ -26,7 +26,8 @@ type Call = { url: string; body: any; headers: Headers };
 async function withMock(
   run: (calls: Call[]) => Promise<void>,
   options: {
-    noKey?: boolean;
+    noGeminiKey?: boolean;
+    noGroqKey?: boolean;
     quota?: boolean;
     badVector?: boolean;
     noMatches?: boolean;
@@ -34,19 +35,22 @@ async function withMock(
     answer?: unknown;
     route?: unknown;
     finishReason?: string;
-    upstreamStatus?: number;
+    geminiStatus?: number;
+    groqStatus?: number;
   } = {},
 ) {
   const savedFetch = globalThis.fetch;
-  const names = ["RAG_API_KEY", "GEMINI_API_KEY", "INSFORGE_BASE_URL", "API_KEY"];
+  const names = ["RAG_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "INSFORGE_BASE_URL", "API_KEY"];
   const previous = names.map((name) => Deno.env.get(name));
   Deno.env.set("RAG_API_KEY", "test-private-key");
   Deno.env.set("INSFORGE_BASE_URL", "https://backend.example.test");
   Deno.env.set("API_KEY", "test-admin-key");
-  if (options.noKey) Deno.env.delete("GEMINI_API_KEY");
+  if (options.noGeminiKey) Deno.env.delete("GEMINI_API_KEY");
   else Deno.env.set("GEMINI_API_KEY", "test-gemini-key");
+  if (options.noGroqKey) Deno.env.delete("GROQ_API_KEY");
+  else Deno.env.set("GROQ_API_KEY", "test-groq-key");
   const calls: Call[] = [];
-  let generation = 0;
+  let groqCall = 0;
   globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const bodyText = typeof init?.body === "string"
@@ -61,9 +65,12 @@ async function withMock(
       headers: new Headers(init?.headers ?? (input instanceof Request ? input.headers : {})),
     });
     if (url.startsWith("https://generativelanguage.googleapis.com/")) {
-      if (options.quota || options.upstreamStatus) {
-        return Response.json({ secret: "upstream-detail-never-return" }, {
-          status: options.upstreamStatus ?? 429,
+      if (options.quota || options.geminiStatus) {
+        return Response.json({
+          error: { status: "PRIVATE_PROVIDER_CODE" },
+          secret: "upstream-detail-never-return",
+        }, {
+          status: options.geminiStatus ?? 429,
         });
       }
       const values = options.badVector ? [1, 2] : vector;
@@ -71,17 +78,23 @@ async function withMock(
         return Response.json({ embeddings: body.requests.map(() => ({ values })) });
       }
       if (url.endsWith(":embedContent")) return Response.json({ embedding: { values } });
-      if (url.endsWith(":generateContent")) {
-        const answer = generation++ === 0
-          ? options.route ?? { route: "documents", answer: "" }
-          : options.answer ?? supported;
+    }
+    if (url === "https://api.groq.com/openai/v1/chat/completions") {
+      if (options.groqStatus) {
         return Response.json({
-          candidates: [{
-            finishReason: options.finishReason ?? "STOP",
-            content: { parts: [{ text: JSON.stringify(answer) }] },
-          }],
-        });
+          error: { type: "private_provider_type", message: "upstream-detail-never-return" },
+        }, { status: options.groqStatus });
       }
+      const currentCall = groqCall++;
+      const answer = currentCall === 0
+        ? options.route ?? { route: "documents", answer: "" }
+        : options.answer ?? supported;
+      return Response.json({
+        choices: [{
+          finish_reason: currentCall === 1 ? options.finishReason ?? "stop" : "stop",
+          message: { role: "assistant", content: JSON.stringify(answer) },
+        }],
+      });
     }
     if (url.startsWith("https://backend.example.test/")) {
       if (options.databaseError) {
@@ -138,7 +151,7 @@ for (const [name, handler] of [["ingest", ingest], ["ask", ask]] as const) {
       assert.equal((await handler(request({}, "wrong"))).status, 401);
       assert.equal(calls.length, 0);
     }));
-  Deno.test(`${name}: invalid JSON and payloads rejected before Gemini`, () =>
+  Deno.test(`${name}: invalid JSON and payloads rejected before external providers`, () =>
     withMock(async (calls) => {
       for (const body of [null, [], {}, { text: 3, question: 4 }, { text: " ", question: " " }]) {
         assert.equal((await handler(request(body))).status, 400);
@@ -156,8 +169,8 @@ for (const [name, handler] of [["ingest", ingest], ["ask", ask]] as const) {
       const response = await handler(request({ text: "documento", question: "pregunta" }));
       assert.equal(response.status, 503);
       assert.equal((await response.json()).code, "GEMINI_API_KEY_NOT_CONFIGURED");
-      assert.equal(calls.length, 0);
-    }, { noKey: true }));
+      assert.equal(calls.length, name === "ask" ? 1 : 0);
+    }, { noGeminiKey: true }));
   Deno.test(`${name}: quota never triggers a retry or paid fallback`, () =>
     withMock(async (calls) => {
       const response = await handler(request({ text: "documento", question: "pregunta" }));
@@ -165,7 +178,7 @@ for (const [name, handler] of [["ingest", ingest], ["ask", ask]] as const) {
       const body = await response.json();
       assert.equal(body.code, "GEMINI_QUOTA_EXCEEDED");
       assert(!JSON.stringify(body).includes("upstream-detail"));
-      assert.equal(calls.length, 1);
+      assert.equal(calls.length, name === "ask" ? 2 : 1);
     }, { quota: true }));
   Deno.test(`${name}: malformed embeddings never reach the database`, () =>
     withMock(async (calls) => {
@@ -178,7 +191,7 @@ for (const [name, handler] of [["ingest", ingest], ["ask", ask]] as const) {
       const response = await handler(request({ text: "documento", question: "pregunta" }));
       assert.equal(response.status, 502);
       assert(!JSON.stringify(await response.json()).includes("upstream-detail"));
-    }, { upstreamStatus: 403 }));
+    }, { geminiStatus: 403 }));
 }
 
 Deno.test("ingest: batch request and single atomic insert", () =>
@@ -190,7 +203,9 @@ Deno.test("ingest: batch request and single atomic insert", () =>
     const count = splitIntoChunks(text).length;
     assert.equal(result.chunksInserted, count);
     assert.equal(calls.length, 2);
+    assert(calls[0].url.includes("generativelanguage.googleapis.com"));
     assert.equal(calls[0].headers.get("x-goog-api-key"), "test-gemini-key");
+    assert.equal(calls[0].headers.get("authorization"), null);
     assert.equal(calls[0].body.requests.length, count);
     assert.equal(calls[0].body.requests[0].embedContentConfig.outputDimensionality, 1536);
     assert(calls[0].body.requests[0].content.parts[0].text.startsWith("title: manual-demo | text: "));
@@ -234,11 +249,39 @@ Deno.test("ask: grounded answer, retrieval top 5 and cited sources", () =>
     assert(result.trace.steps.every((step: any) => step.status === "done"));
     assert(result.trace.steps.every((step: any) => step.durationMs >= 0));
     assert.equal(calls.length, 4);
+    assert.equal(calls[0].url, "https://api.groq.com/openai/v1/chat/completions");
+    assert(calls[1].url.includes(":embedContent"));
+    assert(calls[2].url.includes("/rpc/match_documents"));
+    assert.equal(calls[3].url, "https://api.groq.com/openai/v1/chat/completions");
     assert.equal(calls[2].body.match_count, 5);
     assert.equal(calls[2].body.match_threshold, -1);
     assert(calls[1].body.content.parts[0].text.startsWith("task: question answering | query: "));
-    assert(calls[0].body.systemInstruction.parts[0].text.includes("aunque incluya un saludo"));
-    assert(calls[3].url.includes("gemini-3.6-flash"));
+    assert(calls[0].body.messages[0].content.includes("aunque incluya un saludo"));
+    assert.equal(calls[0].body.model, "openai/gpt-oss-20b");
+    assert.equal(calls[3].body.model, "openai/gpt-oss-20b");
+    assert.equal(calls[0].body.reasoning_effort, "low");
+    assert.equal(calls[3].body.reasoning_effort, "low");
+    assert.equal(calls[0].body.include_reasoning, false);
+    assert.equal(calls[3].body.include_reasoning, false);
+    assert.equal(calls[0].body.max_completion_tokens, 512);
+    assert.equal(calls[3].body.max_completion_tokens, 1536);
+    assert.equal(calls[0].headers.get("authorization"), "Bearer test-groq-key");
+    assert.equal(calls[3].headers.get("authorization"), "Bearer test-groq-key");
+    assert.equal(calls[0].headers.get("x-goog-api-key"), null);
+    assert.equal(calls[3].headers.get("x-goog-api-key"), null);
+    assert.equal(calls[1].headers.get("x-goog-api-key"), "test-gemini-key");
+    assert.equal(calls[1].headers.get("authorization"), null);
+    for (const call of [calls[0], calls[3]]) {
+      assert.equal(call.body.response_format.type, "json_schema");
+      assert.equal(call.body.response_format.json_schema.strict, true);
+      assert.equal(call.body.response_format.json_schema.schema.additionalProperties, false);
+    }
+    const routeSchema = calls[0].body.response_format.json_schema.schema;
+    assert.deepEqual(routeSchema.required, ["route", "answer"]);
+    const answerSchema = calls[3].body.response_format.json_schema.schema;
+    assert.deepEqual(answerSchema.required, ["answered", "answer", "citations"]);
+    assert.equal(answerSchema.properties.citations.items.additionalProperties, false);
+    assert.deepEqual(answerSchema.properties.citations.items.required, ["chunk", "quote"]);
   }));
 Deno.test("ask: social conversation is natural and skips embeddings and database", () =>
   withMock(async (calls) => {
@@ -251,10 +294,15 @@ Deno.test("ask: social conversation is natural and skips embeddings and database
     assert(result.trace.steps.slice(1).every((step: any) => step.status === "skipped"));
     assert.deepEqual(result.trace.retrieval, []);
     assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://api.groq.com/openai/v1/chat/completions");
+    assert.equal(calls[0].headers.get("authorization"), "Bearer test-groq-key");
   }, { route: { route: "conversation", answer: "¡Hola! ¿Qué te gustaría consultar hoy?" } }));
 Deno.test("conversation router fails closed to document retrieval", () => {
   assert.deepEqual(conversationRoute(null), { route: "documents", answer: "" });
-  assert.deepEqual(conversationRoute({ route: "conversation", answer: "" }), { route: "documents", answer: "" });
+  assert.deepEqual(conversationRoute({ route: "conversation", answer: "" }), {
+    route: "documents",
+    answer: "",
+  });
   assert.deepEqual(conversationRoute({ route: "anything", answer: "respuesta" }), {
     route: "documents",
     answer: "",
@@ -264,18 +312,52 @@ Deno.test("conversation router fails closed to document retrieval", () => {
     answer: "",
   });
 });
+Deno.test("ask: missing Groq secret is explicit and makes no external call", () =>
+  withMock(async (calls) => {
+    const response = await ask(request({ question: "Pregunta" }));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, "GROQ_API_KEY_NOT_CONFIGURED");
+    assert.equal(calls.length, 0);
+  }, { noGroqKey: true }));
+for (
+  const [upstreamStatus, status, code] of [
+    [400, 502, "GROQ_REQUEST_REJECTED"],
+    [401, 502, "GROQ_REQUEST_REJECTED"],
+    [403, 502, "GROQ_REQUEST_REJECTED"],
+    [404, 502, "GROQ_MODEL_UNAVAILABLE"],
+    [413, 502, "GROQ_REQUEST_REJECTED"],
+    [422, 502, "GROQ_REQUEST_REJECTED"],
+    [429, 429, "GROQ_RATE_LIMITED"],
+    [498, 503, "GROQ_UNAVAILABLE"],
+    [500, 502, "GROQ_UNAVAILABLE"],
+    [502, 502, "GROQ_UNAVAILABLE"],
+    [503, 503, "GROQ_UNAVAILABLE"],
+  ] as const
+) {
+  Deno.test(`ask: Groq ${upstreamStatus} is sanitized as ${code}`, () =>
+    withMock(async (calls) => {
+      const response = await ask(request({ question: "Pregunta" }));
+      assert.equal(response.status, status);
+      const body = await response.json();
+      assert.equal(body.code, code);
+      assert(!JSON.stringify(body).includes("upstream-detail"));
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].headers.get("authorization"), "Bearer test-groq-key");
+      assert.equal(calls[0].headers.get("x-goog-api-key"), null);
+    }, { groqStatus: upstreamStatus }));
+}
 Deno.test("ask: retired model is reported explicitly", () =>
   withMock(async () => {
     const response = await ask(request({ question: "Pregunta" }));
     assert.equal(response.status, 502);
     assert.equal((await response.json()).code, "GEMINI_MODEL_UNAVAILABLE");
-  }, { upstreamStatus: 404 }));
+  }, { geminiStatus: 404 }));
 Deno.test("ask: provider capacity errors retain status 503", () =>
   withMock(async () => {
     const response = await ask(request({ question: "Pregunta" }));
     assert.equal(response.status, 503);
     assert.equal((await response.json()).code, "GEMINI_UNAVAILABLE");
-  }, { upstreamStatus: 503 }));
+  }, { geminiStatus: 503 }));
 Deno.test("ask: empty corpus skips generation", () =>
   withMock(async (calls) => {
     const result = await (await ask(request({ question: "Pregunta" }))).json();
@@ -301,6 +383,9 @@ Deno.test("ask: invalid citations fail closed", () => {
   }
 });
 Deno.test("ask: truncated model output is an explicit failure", () =>
-  withMock(async () => {
-    assert.equal((await ask(request({ question: "Pregunta" }))).status, 502);
+  withMock(async (calls) => {
+    const response = await ask(request({ question: "Pregunta" }));
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).code, "GROQ_INCOMPLETE_ANSWER");
+    assert.equal(calls.length, 4);
   }, { finishReason: "MAX_TOKENS" }));
